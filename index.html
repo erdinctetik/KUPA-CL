@@ -57,6 +57,12 @@
             font-size: 14px;
         }
 
+        input:disabled {
+            background-color: rgba(255,255,255,0.2);
+            color: #ccc;
+            cursor: not-allowed;
+        }
+
         button {
             background-color: var(--selected-color);
             color: white;
@@ -261,7 +267,7 @@
         YÖNETİCİ MODU: Gerçekleşen Sonuçları Giriyorsunuz!
         <button onclick="saveAndCloseAdmin()" style="margin-left: 15px; background-color: #ffffff; color: #ef4444; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">Kaydet ve Kapat</button>
     </div>
-    <h1>Road to Budapest 26</h1>
+    <h1>Road to Budapest 26 -ERDEMİR-</h1>
 
     <div class="controls">
         <input type="text" id="username" placeholder="İsmini yaz...">
@@ -301,7 +307,7 @@
         const firebaseConfig = {
             apiKey: "AIzaSyBdhqZQylcdp0meGS_2ZEPEpL7v6hcr-R0",
             authDomain: "cl-kupa.firebaseapp.com",
-            databaseURL: "https://cl-kupa-default-rtdb.firebaseio.com", // Eğer sol menüdeki Realtime Database kısmında adres farklıysa buraya yapıştır
+            databaseURL: "https://cl-kupa-default-rtdb.firebaseio.com", 
             projectId: "cl-kupa",
             storageBucket: "cl-kupa.firebasestorage.app",
             messagingSenderId: "839833966251",
@@ -337,7 +343,7 @@
             champion: "" 
         };
 
-        let savedUsers = {}; // Artık localStorage değil, Firebase'den gelecek
+        let savedUsers = {}; 
         let isRealResultsMode = false;
 
         function init() {
@@ -347,7 +353,6 @@
                 savedUsers = data || {};
                 updateUserDropdown();
                 
-                // Başka biri o an veri kaydederse, senin ekranın (eğer bir kaydı inceliyorsan) otomatik güncellenir.
                 let selectedUser = document.getElementById('userSelect').value;
                 if(selectedUser || isRealResultsMode) {
                     renderBracket();
@@ -360,7 +365,6 @@
         function renderBracket() {
             const container = document.getElementById('bracket');
             
-            // Görselleştirme kontrolleri
             let userSelectEl = document.getElementById('userSelect');
             let isViewingUser = userSelectEl && userSelectEl.value !== "" && !isRealResultsMode;
             let real = savedUsers["GERCEKLIK_ADMIN_HESABI"];
@@ -493,6 +497,13 @@
         function advance(element, teamName, currentRound, side, index, nextRound) {
             if (!teamName || teamName === "?") return;
 
+            // YENİ EKLENDİ: Eğer eski bir kayıt inceleniyorsa ve admin modunda değilsek tıklamaya izin verme
+            let userSelectEl = document.getElementById('userSelect');
+            if (!isRealResultsMode && userSelectEl && userSelectEl.value !== "") {
+                alert("Kayıtlı bir tahmin üzerinde değişiklik yapamazsınız. Yeni bir tahmin yapmak istiyorsanız listeden 'Kayıtlı Tahminlere Bak' seçeneğine dönün.");
+                return;
+            }
+
             if (nextRound === 'champion') {
                 predictions.champion = teamName;
             } else if (nextRound === 'final') {
@@ -533,6 +544,12 @@
                 alert('Lütfen kaydetmeden önce bir isim girin!');
                 return;
             }
+
+            // YENİ EKLENDİ: İsim daha önceden alınmışsa ve yönetici değilsek üzerine kaydetmeyi engelle
+            if (!isRealResultsMode && savedUsers[username]) {
+                alert('Bu isimde bir kayıt zaten var! Üzerine değişiklik yapılamaz. Eğer size aitse önce silmeniz gerekir.');
+                return;
+            }
             
             // FIREBASE: Veritabanına Yazma
             let dataToSave = JSON.parse(JSON.stringify(predictions));
@@ -555,10 +572,12 @@
 
             if (username && savedUsers[username]) {
                 document.getElementById('username').value = username;
+                document.getElementById('username').disabled = true; // YENİ EKLENDİ: İnceleme modunda ismin değiştirilmesini engeller
                 predictions = JSON.parse(JSON.stringify(savedUsers[username]));
                 renderBracket();
             } else {
                 document.getElementById('username').value = "";
+                document.getElementById('username').disabled = false; // YENİ EKLENDİ
                 predictions = { qf: { left: ["", "", "", ""], right: ["", "", "", ""] }, sf: { left: ["", ""], right: ["", ""] }, final: ["", ""], champion: "" };
                 renderBracket();
             }
@@ -575,7 +594,6 @@
                 }
             }
             
-            // Kullanıcı dropdown güncellendiğinde seçimini kaybetmesin
             if (currentSelection && savedUsers[currentSelection]) {
                 select.value = currentSelection;
             }
@@ -609,6 +627,7 @@
                 // FIREBASE: Veritabanından Silme
                 database.ref('cl_predictions/' + username).remove().then(() => {
                     document.getElementById('username').value = "";
+                    document.getElementById('username').disabled = false; // YENİ EKLENDİ
                     document.getElementById('deletePass').value = "";
                     toggleDeleteBox();
                     
@@ -640,7 +659,6 @@
             }
             renderBracket();
             
-            // Şifre kutusunu gizle ve içini temizle
             document.getElementById('adminPass').value = "";
             toggleAdminBox();
         }
@@ -785,7 +803,6 @@
             document.body.removeChild(link);
         }
 
-        // Sayfa yüklendiğinde Firebase dinleyicisini başlat
         init();
     </script>
 </body>
