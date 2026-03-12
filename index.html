@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Şampiyonlar Ligi Tahmin Aracı</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
     <style>
         :root {
             --bg-color: #030a24;
@@ -23,6 +26,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            transition: border 0.3s;
         }
 
         h1 {
@@ -30,14 +34,14 @@
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 2px;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
         }
 
         .controls {
             background: rgba(255, 255, 255, 0.1);
             padding: 15px 30px;
             border-radius: 10px;
-            margin-bottom: 40px;
+            margin-bottom: 30px;
             display: flex;
             gap: 15px;
             align-items: center;
@@ -62,6 +66,11 @@
         }
 
         button:hover { background-color: #2563eb; }
+        
+        .btn-gold { background: linear-gradient(45deg, #ffd700, #ff8c00); color: #000; }
+        .btn-gold:hover { background: linear-gradient(45deg, #ff8c00, #ffd700); }
+        .btn-excel { background-color: #059669; }
+        .btn-excel:hover { background-color: #047857; }
 
         .bracket-container {
             display: flex;
@@ -175,10 +184,83 @@
             padding: 5px 10px;
             border-radius: 5px;
         }
+
+        /* --- LİDERLİK TABLOSU VE ADMİN MODU --- */
+        #adminBanner {
+            display: none;
+            background: #ef4444;
+            color: white;
+            width: 100%;
+            text-align: center;
+            padding: 10px;
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .leaderboard-modal {
+            position: fixed;
+            top: 15%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ffffff;
+            color: #000;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+            z-index: 1000;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+        }
+        
+        .leaderboard-modal ul {
+            list-style: none;
+            padding: 0;
+            margin: 20px 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .leaderboard-modal li {
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 18px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .leaderboard-modal li:nth-child(1) { font-weight: bold; background: #fffbeb; color: #b45309; border-radius: 8px;}
+        .leaderboard-modal li:nth-child(2) { font-weight: bold; background: #f8fafc; color: #475569; border-radius: 8px;}
+        .leaderboard-modal li:nth-child(3) { font-weight: bold; background: #fffedd; color: #92400e; border-radius: 8px;}
+
+        /* --- DOĞRU TAHMİN RENKLERİ VE PUANLARI --- */
+        .correct-guess {
+            background: #059669 !important; 
+            color: #ffffff !important;
+        }
+
+        .champion-box.correct-guess {
+            background: linear-gradient(45deg, #059669, #10b981) !important;
+            color: white !important;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.8) !important;
+        }
+
+        .points-tag {
+            font-size: 13px;
+            color: #fbbf24;
+            margin-left: 8px;
+            font-weight: 800;
+            text-shadow: 0 0 4px rgba(0,0,0,0.4);
+        }
     </style>
 </head>
 <body>
 
+    <div id="adminBanner">
+        YÖNETİCİ MODU: Gerçekleşen Sonuçları Giriyorsunuz!
+        <button onclick="saveAndCloseAdmin()" style="margin-left: 15px; background-color: #ffffff; color: #ef4444; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">Kaydet ve Kapat</button>
+    </div>
     <h1>Road to Budapest 26</h1>
 
     <div class="controls">
@@ -195,12 +277,43 @@
             <input type="password" id="deletePass" placeholder="Şifre" style="width: 70px;">
             <button onclick="deleteSelected()" style="background-color: #ef4444;">Seçili Olanı Sil</button>
         </div>
+
+        <span style="color: #94a3b8;">|</span>
+        <button class="btn-gold" onclick="showLeaderboard()">Puan Tablosu 🏆</button>
+        
+        <button onclick="toggleAdminBox()" style="background-color: #10b981;">Gerçekleşenleri Gir</button>
+        
+        <div class="delete-section" id="adminBox" style="background: rgba(16, 185, 129, 0.2);">
+            <input type="password" id="adminPass" placeholder="Şifre" style="width: 70px;">
+            <button onclick="enterAdminMode()" style="background-color: #10b981;">Giriş</button>
+        </div>
+
+        <button class="btn-excel" onclick="exportToExcel()">Excel İndir 📊</button>
     </div>
 
     <div class="bracket-container" id="bracket">
         </div>
 
     <script>
+     // ==========================================
+        // FIREBASE AYARLARI
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBdhqZQylcdp0meGS_2ZEPEpL7v6hcr-R0",
+            authDomain: "cl-kupa.firebaseapp.com",
+            databaseURL: "https://cl-kupa-default-rtdb.firebaseio.com", // Eğer sol menüdeki Realtime Database kısmında adres farklıysa buraya yapıştır
+            projectId: "cl-kupa",
+            storageBucket: "cl-kupa.firebasestorage.app",
+            messagingSenderId: "839833966251",
+            appId: "1:839833966251:web:01eaf0b054a5a872c509ee",
+            measurementId: "G-DD2GRY3QY5"
+        };
+        
+        // Firebase Başlatma
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        // ===================================================================================
+
         // R16 (Son 16) Takımları
         const initialTeams = {
             left: [
@@ -217,7 +330,6 @@
             ]
         };
 
-        // Mevcut tahmin durumu (State)
         let predictions = {
             qf: { left: ["", "", "", ""], right: ["", "", "", ""] }, 
             sf: { left: ["", ""], right: ["", ""] }, 
@@ -225,15 +337,45 @@
             champion: "" 
         };
 
-        let savedUsers = JSON.parse(localStorage.getItem('cl_predictions')) || {};
+        let savedUsers = {}; // Artık localStorage değil, Firebase'den gelecek
+        let isRealResultsMode = false;
 
         function init() {
+            // FIREBASE: Veritabanındaki değişiklikleri anlık olarak dinler
+            database.ref('cl_predictions').on('value', (snapshot) => {
+                const data = snapshot.val();
+                savedUsers = data || {};
+                updateUserDropdown();
+                
+                // Başka biri o an veri kaydederse, senin ekranın (eğer bir kaydı inceliyorsan) otomatik güncellenir.
+                let selectedUser = document.getElementById('userSelect').value;
+                if(selectedUser || isRealResultsMode) {
+                    renderBracket();
+                }
+            });
+            
             renderBracket();
-            updateUserDropdown();
         }
 
         function renderBracket() {
             const container = document.getElementById('bracket');
+            
+            // Görselleştirme kontrolleri
+            let userSelectEl = document.getElementById('userSelect');
+            let isViewingUser = userSelectEl && userSelectEl.value !== "" && !isRealResultsMode;
+            let real = savedUsers["GERCEKLIK_ADMIN_HESABI"];
+            
+            let f1 = predictions.final[0];
+            let f2 = predictions.final[1];
+            let f1Correct = isViewingUser && real && real.final && f1 === real.final[0] && f1 !== "";
+            let f2Correct = isViewingUser && real && real.final && f2 === real.final[1] && f2 !== "";
+            let f1Pts = f1Correct ? '+2' : '';
+            let f2Pts = f2Correct ? (f1Correct ? '+3' : '+2') : '';
+
+            let champ = predictions.champion;
+            let champCorrect = isViewingUser && real && champ === real.champion && champ !== "";
+            let champPts = champCorrect ? '+4' : '';
+
             container.innerHTML = `
                 <div class="column">
                     <div class="round-title">SON 16</div>
@@ -251,20 +393,20 @@
                 <div class="column center-column">
                     <div class="round-title">FİNAL</div>
                     <div class="match">
-                        <div class="team ${predictions.champion === predictions.final[0] && predictions.champion ? 'selected' : ''} ${!predictions.final[0] ? 'empty-slot' : ''}" 
-                             onclick="advance(this, '${predictions.final[0]}', 'final', 'left', 0, 'champion')">
-                            ${predictions.final[0] || "Finalist 1"}
+                        <div class="team ${predictions.champion === f1 && champ ? 'selected' : ''} ${!f1 ? 'empty-slot' : ''} ${f1Correct ? 'correct-guess' : ''}" 
+                             onclick="advance(this, '${f1}', 'final', 'left', 0, 'champion')">
+                            ${f1 || "Finalist 1"} ${f1Correct ? `<span class="points-tag">${f1Pts}p</span>` : ''}
                         </div>
-                        <div class="team ${predictions.champion === predictions.final[1] && predictions.champion ? 'selected' : ''} ${!predictions.final[1] ? 'empty-slot' : ''}" 
-                             onclick="advance(this, '${predictions.final[1]}', 'final', 'right', 1, 'champion')">
-                            ${predictions.final[1] || "Finalist 2"}
+                        <div class="team ${predictions.champion === f2 && champ ? 'selected' : ''} ${!f2 ? 'empty-slot' : ''} ${f2Correct ? 'correct-guess' : ''}" 
+                             onclick="advance(this, '${f2}', 'final', 'right', 1, 'champion')">
+                            ${f2 || "Finalist 2"} ${f2Correct ? `<span class="points-tag">${f2Pts}p</span>` : ''}
                         </div>
                     </div>
                     
                     <div class="round-title" style="margin-top: 30px; color: #ffd700;">ŞAMPİYON</div>
-                    <div class="match champion-box">
-                        <div class="team ${!predictions.champion ? 'empty-slot' : ''}">
-                            ${predictions.champion || "Şampiyon"}
+                    <div class="match champion-box ${champCorrect ? 'correct-guess' : ''}">
+                        <div class="team ${!champ ? 'empty-slot' : ''}">
+                            ${champ || "Şampiyon"} ${champCorrect ? `<span class="points-tag" style="color: #fff;">${champPts}p</span>` : ''}
                         </div>
                     </div>
 
@@ -302,12 +444,18 @@
 
         function renderSlots(slots, currentRound, side, nextRound) {
             let html = '';
+            let userSelectEl = document.getElementById('userSelect');
+            let isViewingUser = userSelectEl && userSelectEl.value !== "" && !isRealResultsMode;
+            let real = savedUsers["GERCEKLIK_ADMIN_HESABI"];
+
             for (let i = 0; i < slots.length; i += 2) {
                 const t1 = slots[i];
                 const t2 = slots[i+1];
                 
                 let isT1Selected = false;
                 let isT2Selected = false;
+                let t1Correct = false;
+                let t2Correct = false;
                 
                 if (nextRound === 'final') {
                     const finalIndex = side === 'left' ? 0 : 1;
@@ -319,12 +467,24 @@
                     isT2Selected = predictions[nextRound][side][nextIndex] === t2 && t2 !== "";
                 }
 
+                if (isViewingUser && real && real[currentRound]) {
+                    t1Correct = t1 !== "" && t1 === real[currentRound][side][i];
+                    t2Correct = t2 !== "" && t2 === real[currentRound][side][i+1];
+                }
+
+                let t1Pts = t1Correct ? '+2' : '';
+                let t2Pts = t2Correct ? (t1Correct ? '+3' : '+2') : '';
+
                 html += `
                 <div class="match">
-                    <div class="team ${isT1Selected ? 'selected' : ''} ${!t1 ? 'empty-slot' : ''}" 
-                         onclick="advance(this, '${t1}', '${currentRound}', '${side}', ${i}, '${nextRound}')">${t1 || "?"}</div>
-                    <div class="team ${isT2Selected ? 'selected' : ''} ${!t2 ? 'empty-slot' : ''}" 
-                         onclick="advance(this, '${t2}', '${currentRound}', '${side}', ${i+1}, '${nextRound}')">${t2 || "?"}</div>
+                    <div class="team ${isT1Selected ? 'selected' : ''} ${!t1 ? 'empty-slot' : ''} ${t1Correct ? 'correct-guess' : ''}" 
+                         onclick="advance(this, '${t1}', '${currentRound}', '${side}', ${i}, '${nextRound}')">
+                         ${t1 || "?"} ${t1Correct ? `<span class="points-tag">${t1Pts}p</span>` : ''}
+                    </div>
+                    <div class="team ${isT2Selected ? 'selected' : ''} ${!t2 ? 'empty-slot' : ''} ${t2Correct ? 'correct-guess' : ''}" 
+                         onclick="advance(this, '${t2}', '${currentRound}', '${side}', ${i+1}, '${nextRound}')">
+                         ${t2 || "?"} ${t2Correct ? `<span class="points-tag">${t2Pts}p</span>` : ''}
+                    </div>
                 </div>`;
             }
             return html;
@@ -373,21 +533,31 @@
                 alert('Lütfen kaydetmeden önce bir isim girin!');
                 return;
             }
-            savedUsers[username] = JSON.parse(JSON.stringify(predictions));
-            localStorage.setItem('cl_predictions', JSON.stringify(savedUsers));
-            updateUserDropdown();
-            alert(username + ' için tahminler başarıyla kaydedildi!');
+            
+            // FIREBASE: Veritabanına Yazma
+            let dataToSave = JSON.parse(JSON.stringify(predictions));
+            database.ref('cl_predictions/' + username).set(dataToSave).then(() => {
+                if(isRealResultsMode) {
+                    alert('Gerçekleşen sonuçlar tüm kullanıcılar için buluta kaydedildi!');
+                } else {
+                    alert(username + ' için tahminler buluta kaydedildi! Herkes görebilir.');
+                }
+            }).catch((error) => {
+                alert("Kaydetme sırasında bir hata oluştu: " + error);
+            });
         }
 
         function loadPrediction() {
             const select = document.getElementById('userSelect');
             const username = select.value;
+            
+            if (isRealResultsMode) exitAdminMode();
+
             if (username && savedUsers[username]) {
                 document.getElementById('username').value = username;
                 predictions = JSON.parse(JSON.stringify(savedUsers[username]));
                 renderBracket();
             } else {
-                // Seçim temizlenirse ekranı da sıfırla
                 document.getElementById('username').value = "";
                 predictions = { qf: { left: ["", "", "", ""], right: ["", "", "", ""] }, sf: { left: ["", ""], right: ["", ""] }, final: ["", ""], champion: "" };
                 renderBracket();
@@ -396,15 +566,28 @@
 
         function updateUserDropdown() {
             const select = document.getElementById('userSelect');
+            let currentSelection = select.value;
+            
             select.innerHTML = '<option value="">Kayıtlı Tahminlere Bak</option>';
             for (let user in savedUsers) {
-                select.innerHTML += `<option value="${user}">${user}</option>`;
+                if(user !== "GERCEKLIK_ADMIN_HESABI") {
+                    select.innerHTML += `<option value="${user}">${user}</option>`;
+                }
+            }
+            
+            // Kullanıcı dropdown güncellendiğinde seçimini kaybetmesin
+            if (currentSelection && savedUsers[currentSelection]) {
+                select.value = currentSelection;
             }
         }
 
-        // --- SİLME İŞLEMİ FONKSİYONLARI ---
         function toggleDeleteBox() {
             const box = document.getElementById('deleteBox');
+            box.style.display = box.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        function toggleAdminBox() {
+            const box = document.getElementById('adminBox');
             box.style.display = box.style.display === 'flex' ? 'none' : 'flex';
         }
 
@@ -413,36 +596,197 @@
             const username = select.value;
             const pass = document.getElementById('deletePass').value;
 
-            // ŞİFRE KONTROLÜ (Buradaki 1234 yazısını istediğin bir şifreyle değiştirebilirsin)
-            if (pass !== '1234') {
+            if (pass !== '3434') {
                 alert('Hatalı şifre girdiniz!');
                 return;
             }
-
             if (!username) {
                 alert('Lütfen silmek için açılır listeden bir kayıt seçin!');
                 return;
             }
 
-            if(confirm(username + ' adlı kullanıcının tahmini silinecek. Emin misin?')) {
-                delete savedUsers[username];
-                localStorage.setItem('cl_predictions', JSON.stringify(savedUsers));
-                
-                // Ekranı sıfırla ve listeyi güncelle
-                updateUserDropdown();
-                document.getElementById('username').value = "";
-                document.getElementById('deletePass').value = "";
-                toggleDeleteBox();
-                
-                predictions = { qf: { left: ["", "", "", ""], right: ["", "", "", ""] }, sf: { left: ["", ""], right: ["", ""] }, final: ["", ""], champion: "" };
-                renderBracket();
-                
-                alert('Kayıt başarıyla silindi.');
+            if(confirm(username + ' adlı kullanıcının tahmini buluttan silinecek. Emin misin?')) {
+                // FIREBASE: Veritabanından Silme
+                database.ref('cl_predictions/' + username).remove().then(() => {
+                    document.getElementById('username').value = "";
+                    document.getElementById('deletePass').value = "";
+                    toggleDeleteBox();
+                    
+                    predictions = { qf: { left: ["", "", "", ""], right: ["", "", "", ""] }, sf: { left: ["", ""], right: ["", ""] }, final: ["", ""], champion: "" };
+                    renderBracket();
+                    alert('Kayıt başarıyla silindi.');
+                });
             }
         }
 
+        function enterAdminMode() {
+            const pass = document.getElementById('adminPass').value;
+            if(pass !== '3434') { 
+                if(pass !== "") alert("Hatalı şifre!"); 
+                return; 
+            }
+            
+            isRealResultsMode = true;
+            document.getElementById('username').value = "GERCEKLIK_ADMIN_HESABI";
+            document.getElementById('username').disabled = true;
+            document.getElementById('adminBanner').style.display = 'block';
+            document.body.style.border = "5px solid #ef4444";
+            document.getElementById('userSelect').value = "";
+            
+            if(savedUsers["GERCEKLIK_ADMIN_HESABI"]) {
+                predictions = JSON.parse(JSON.stringify(savedUsers["GERCEKLIK_ADMIN_HESABI"]));
+            } else {
+                predictions = { qf: { left: ["", "", "", ""], right: ["", "", "", ""] }, sf: { left: ["", ""], right: ["", ""] }, final: ["", ""], champion: "" };
+            }
+            renderBracket();
+            
+            // Şifre kutusunu gizle ve içini temizle
+            document.getElementById('adminPass').value = "";
+            toggleAdminBox();
+        }
+
+        function exitAdminMode() {
+            isRealResultsMode = false;
+            document.getElementById('username').disabled = false;
+            document.getElementById('adminBanner').style.display = 'none';
+            document.body.style.border = "none";
+        }
+
+        function saveAndCloseAdmin() {
+            savePrediction();
+            exitAdminMode();
+            document.getElementById('username').value = "";
+            document.getElementById('userSelect').value = "";
+            predictions = { qf: { left: ["", "", "", ""], right: ["", "", "", ""] }, sf: { left: ["", ""], right: ["", ""] }, final: ["", ""], champion: "" };
+            renderBracket();
+        }
+
+        function calculatePoints(user) {
+            let real = savedUsers["GERCEKLIK_ADMIN_HESABI"];
+            if(!real) return 0;
+            
+            let pts = 0;
+            let pred = savedUsers[user];
+            
+            function calcPair(p1, p2, r1, r2) {
+                let pairPts = 0;
+                let p1Correct = (p1 && p1 === r1);
+                let p2Correct = (p2 && p2 === r2);
+                if(p1Correct) pairPts += 2;
+                if(p2Correct) pairPts += 2;
+                if(p1Correct && p2Correct) pairPts += 1;
+                return pairPts;
+            }
+            
+            pts += calcPair(pred.qf.left[0], pred.qf.left[1], real.qf.left[0], real.qf.left[1]);
+            pts += calcPair(pred.qf.left[2], pred.qf.left[3], real.qf.left[2], real.qf.left[3]);
+            pts += calcPair(pred.qf.right[0], pred.qf.right[1], real.qf.right[0], real.qf.right[1]);
+            pts += calcPair(pred.qf.right[2], pred.qf.right[3], real.qf.right[2], real.qf.right[3]);
+
+            pts += calcPair(pred.sf.left[0], pred.sf.left[1], real.sf.left[0], real.sf.left[1]);
+            pts += calcPair(pred.sf.right[0], pred.sf.right[1], real.sf.right[0], real.sf.right[1]);
+
+            pts += calcPair(pred.final[0], pred.final[1], real.final[0], real.final[1]);
+
+            if(pred.champion && pred.champion === real.champion) {
+                pts += 4;
+            }
+            
+            return pts;
+        }
+
+        function showLeaderboard() {
+            let real = savedUsers["GERCEKLIK_ADMIN_HESABI"];
+            if(!real) {
+                alert("Henüz maç sonuçları girilmemiş! Önce 'Gerçekleşenleri Gir' butonundan maçları kaydetmelisin.");
+                return;
+            }
+            
+            let standings = [];
+            for(let user in savedUsers) {
+                if(user === "GERCEKLIK_ADMIN_HESABI") continue;
+                standings.push({name: user, points: calculatePoints(user)});
+            }
+            
+            standings.sort((a,b) => b.points - a.points);
+            
+            let html = `
+            <div id="leaderboardModal" class="leaderboard-modal">
+                <h2 style="margin-top:0;">🏆 Puan Tablosu</h2>
+                <p style="font-size:12px; color:#64748b;">Doğru Takım: 2p | Eşleşmeyi Bilme Bonusu: +1p | Şampiyon: 4p</p>
+                <ul>`;
+            
+            if(standings.length === 0) {
+                html += `<li>Henüz tahmin yapan kimse yok.</li>`;
+            } else {
+                standings.forEach((s, i) => {
+                    let medal = i === 0 ? "🥇" : (i === 1 ? "🥈" : (i === 2 ? "🥉" : `${i+1}.`));
+                    html += `<li><span>${medal} ${s.name}</span> <b>${s.points} p</b></li>`;
+                });
+            }
+            
+            html += `</ul><button onclick="document.getElementById('leaderboardModal').remove()" style="width:100%; padding:12px; border-radius: 5px; border:none; color:white; font-weight:bold; cursor:pointer; background:#475569;">Kapat</button></div>`;
+            
+            let oldModal = document.getElementById('leaderboardModal');
+            if(oldModal) oldModal.remove();
+            
+            document.body.insertAdjacentHTML('beforeend', html);
+        }
+
+        function exportToExcel() {
+            if (Object.keys(savedUsers).length === 0 || (Object.keys(savedUsers).length === 1 && savedUsers["GERCEKLIK_ADMIN_HESABI"])) {
+                alert("Henüz dışa aktarılacak bir tahmin kaydı yok.");
+                return;
+            }
+
+            let tableHTML = `<html xmlns:x="urn:schemas-microsoft-com:office:excel">
+            <head><meta charset="utf-8"></head>
+            <body>
+                <table border="1">
+                    <thead>
+                        <tr style="background-color: #f2f2f2;">
+                            <th>İsim</th>
+                            <th>Toplam Puan</th>
+                            <th>Çeyrek Final 1</th><th>Çeyrek Final 2</th><th>Çeyrek Final 3</th><th>Çeyrek Final 4</th>
+                            <th>Çeyrek Final 5</th><th>Çeyrek Final 6</th><th>Çeyrek Final 7</th><th>Çeyrek Final 8</th>
+                            <th>Yarı Final 1</th><th>Yarı Final 2</th><th>Yarı Final 3</th><th>Yarı Final 4</th>
+                            <th>Finalist 1</th><th>Finalist 2</th>
+                            <th>Şampiyon</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+            for (let user in savedUsers) {
+                if (user === "GERCEKLIK_ADMIN_HESABI") continue;
+
+                let pred = savedUsers[user];
+                let pts = savedUsers["GERCEKLIK_ADMIN_HESABI"] ? calculatePoints(user) : "Hesaplanmadı";
+
+                tableHTML += `<tr>
+                    <td>${user}</td>
+                    <td style="font-weight: bold; text-align: center;">${pts}</td>
+                    <td>${pred.qf.left[0] || "-"}</td><td>${pred.qf.left[1] || "-"}</td><td>${pred.qf.left[2] || "-"}</td><td>${pred.qf.left[3] || "-"}</td>
+                    <td>${pred.qf.right[0] || "-"}</td><td>${pred.qf.right[1] || "-"}</td><td>${pred.qf.right[2] || "-"}</td><td>${pred.qf.right[3] || "-"}</td>
+                    <td>${pred.sf.left[0] || "-"}</td><td>${pred.sf.left[1] || "-"}</td><td>${pred.sf.right[0] || "-"}</td><td>${pred.sf.right[1] || "-"}</td>
+                    <td>${pred.final[0] || "-"}</td><td>${pred.final[1] || "-"}</td>
+                    <td style="font-weight: bold;">${pred.champion || "-"}</td>
+                </tr>`;
+            }
+
+            tableHTML += `</tbody></table></body></html>`;
+
+            let blob = new Blob([tableHTML], { type: "application/vnd.ms-excel" });
+            let link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "sampiyonlar_ligi_tahminleri.xls";
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Sayfa yüklendiğinde Firebase dinleyicisini başlat
         init();
     </script>
 </body>
-
 </html>
