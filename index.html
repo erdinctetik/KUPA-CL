@@ -143,6 +143,10 @@
             text-align: center;
             font-weight: 600;
             border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
 
         .team:last-child { border-bottom: none; }
@@ -150,6 +154,14 @@
         .team.selected { background-color: var(--selected-color); }
         
         .empty-slot { color: #64748b; font-style: italic; }
+        
+        /* ORAN ETİKETİ İÇİN YENİ CSS */
+        .odds-tag {
+            font-size: 11px;
+            color: #fbbf24;
+            font-weight: normal;
+            margin-top: 2px;
+        }
 
         .center-column {
             flex: 1.5;
@@ -204,28 +216,36 @@
             margin-bottom: 15px;
         }
 
-        .leaderboard-modal {
+        .modal-overlay {
             position: fixed;
-            top: 15%;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #ffffff;
-            color: #000;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
-            z-index: 1000;
-            width: 90%;
-            max-width: 400px;
-            text-align: center;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 999;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .leaderboard-modal {
+    position: fixed;
+    top: 15%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #ffffff;
+    color: #000;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    z-index: 1000; /* BURAYI BUL */
+    width: 90%;
+    max-width: 400px;
+    text-align: center;
         }
         
         .leaderboard-modal ul {
             list-style: none;
             padding: 0;
             margin: 20px 0;
-            max-height: 300px;
-            overflow-y: auto;
         }
 
         .leaderboard-modal li {
@@ -239,6 +259,20 @@
         .leaderboard-modal li:nth-child(1) { font-weight: bold; background: #fffbeb; color: #b45309; border-radius: 8px;}
         .leaderboard-modal li:nth-child(2) { font-weight: bold; background: #f8fafc; color: #475569; border-radius: 8px;}
         .leaderboard-modal li:nth-child(3) { font-weight: bold; background: #fffedd; color: #92400e; border-radius: 8px;}
+
+        /* ORAN GİRİŞ EKRANI CSS */
+        .odds-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            text-align: left;
+            margin: 20px 0;
+        }
+        .odds-item {
+            background: #f8fafc; padding: 8px; border-radius: 5px; border: 1px solid #e2e8f0; display: flex; flex-direction: column;
+        }
+        .odds-item label { font-size: 12px; font-weight: bold; margin-bottom: 4px; color: #334155;}
+        .odds-item input { border: 1px solid #cbd5e1; padding: 5px; border-radius: 3px; font-weight: bold; color: #b45309; }
 
         /* --- DOĞRU TAHMİN RENKLERİ VE PUANLARI --- */
         .correct-guess {
@@ -265,7 +299,8 @@
 
     <div id="adminBanner">
         YÖNETİCİ MODU: Gerçekleşen Sonuçları Giriyorsunuz!
-        <button onclick="saveAndCloseAdmin()" style="margin-left: 15px; background-color: #ffffff; color: #ef4444; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">Kaydet ve Kapat</button>
+        <button onclick="openOddsModal()" style="margin-left: 15px; background-color: #fbbf24; color: #000; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">Takım Oranlarını Ayarla</button>
+        <button onclick="saveAndCloseAdmin()" style="margin-left: 10px; background-color: #ffffff; color: #ef4444; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">Kaydet ve Kapat</button>
     </div>
     <h1>Road to Budapest 26 -ERDEMİR-</h1>
 
@@ -300,8 +335,19 @@
     <div class="bracket-container" id="bracket">
         </div>
 
+    <div class="modal-overlay" id="oddsModalOverlay">
+        <div class="leaderboard-modal">
+            <h2 style="margin-top:0; color: #b45309;">📈 Takım Oranları (Katsayı)</h2>
+            <p style="font-size: 12px; color: #64748b;">Doğru bilinen turun puanı buradaki katsayı ile çarpılır.</p>
+            <div class="odds-grid" id="oddsGrid">
+                </div>
+            <button onclick="saveOdds()" style="width: 100%; padding: 12px; margin-bottom: 10px; background-color:#059669;">Oranları Buluta Kaydet</button>
+            <button onclick="closeOddsModal()" style="width: 100%; padding: 12px; background: #475569;">İptal</button>
+        </div>
+    </div>
+
     <script>
-     // ==========================================
+        // ==========================================
         // FIREBASE AYARLARI
         // ==========================================
         const firebaseConfig = {
@@ -336,6 +382,11 @@
             ]
         };
 
+        const allTeamsList = [
+            "PSG", "Chelsea", "Galatasaray", "Liverpool", "Real Madrid", "Man City", "Atalanta", "Bayern Munich",
+            "Newcastle", "Barcelona", "Atletico Madrid", "Tottenham", "Sporting CP", "Bodo", "Arsenal", "Leverkusen"
+        ];
+
         let predictions = {
             qf: { left: ["", "", "", ""], right: ["", "", "", ""] }, 
             sf: { left: ["", ""], right: ["", ""] }, 
@@ -344,10 +395,11 @@
         };
 
         let savedUsers = {}; 
+        let teamOdds = {}; // Veritabanından çekilecek oranlar
         let isRealResultsMode = false;
 
         function init() {
-            // FIREBASE: Veritabanındaki değişiklikleri anlık olarak dinler
+            // Tahminleri Dinle
             database.ref('cl_predictions').on('value', (snapshot) => {
                 const data = snapshot.val();
                 savedUsers = data || {};
@@ -358,8 +410,21 @@
                     renderBracket();
                 }
             });
+
+            // Oranları Dinle (YENİ)
+            database.ref('cl_odds').on('value', (snapshot) => {
+                teamOdds = snapshot.val() || {};
+                allTeamsList.forEach(t => { if(!teamOdds[t]) teamOdds[t] = 1.0; });
+                renderBracket();
+            });
             
             renderBracket();
+        }
+
+        function getOddsStr(teamName) {
+            if(!teamName || teamName === "?") return "";
+            let val = teamOdds[teamName] || 1.0;
+            return `<span class="odds-tag">Oran: x${val}</span>`;
         }
 
         function renderBracket() {
@@ -373,12 +438,13 @@
             let f2 = predictions.final[1];
             let f1Correct = isViewingUser && real && real.final && f1 === real.final[0] && f1 !== "";
             let f2Correct = isViewingUser && real && real.final && f2 === real.final[1] && f2 !== "";
-            let f1Pts = f1Correct ? '+2' : '';
-            let f2Pts = f2Correct ? (f1Correct ? '+3' : '+2') : '';
-
             let champ = predictions.champion;
             let champCorrect = isViewingUser && real && champ === real.champion && champ !== "";
-            let champPts = champCorrect ? '+4' : '';
+
+            // Ekranda görünecek hesaplanmış puanlar
+            let f1Pts = f1Correct ? `+${2 * (teamOdds[f1]||1)}p` : '';
+            let f2Pts = f2Correct ? `+${2 * (teamOdds[f2]||1)}p` : '';
+            let champPts = champCorrect ? `+${4 * (teamOdds[champ]||1)}p` : '';
 
             container.innerHTML = `
                 <div class="column">
@@ -387,11 +453,11 @@
                 </div>
                 <div class="column">
                     <div class="round-title">ÇEYREK FİNAL</div>
-                    ${renderSlots(predictions.qf.left, 'qf', 'left', 'sf')}
+                    ${renderSlots(predictions.qf.left, 'qf', 'left', 'sf', 2)}
                 </div>
                 <div class="column">
                     <div class="round-title">YARI FİNAL</div>
-                    ${renderSlots(predictions.sf.left, 'sf', 'left', 'final')}
+                    ${renderSlots(predictions.sf.left, 'sf', 'left', 'final', 2)}
                 </div>
 
                 <div class="column center-column">
@@ -399,18 +465,24 @@
                     <div class="match">
                         <div class="team ${predictions.champion === f1 && champ ? 'selected' : ''} ${!f1 ? 'empty-slot' : ''} ${f1Correct ? 'correct-guess' : ''}" 
                              onclick="advance(this, '${f1}', 'final', 'left', 0, 'champion')">
-                            ${f1 || "Finalist 1"} ${f1Correct ? `<span class="points-tag">${f1Pts}p</span>` : ''}
+                            <span>${f1 || "Finalist 1"}</span>
+                            ${getOddsStr(f1)}
+                            ${f1Correct ? `<span class="points-tag">${f1Pts}</span>` : ''}
                         </div>
                         <div class="team ${predictions.champion === f2 && champ ? 'selected' : ''} ${!f2 ? 'empty-slot' : ''} ${f2Correct ? 'correct-guess' : ''}" 
                              onclick="advance(this, '${f2}', 'final', 'right', 1, 'champion')">
-                            ${f2 || "Finalist 2"} ${f2Correct ? `<span class="points-tag">${f2Pts}p</span>` : ''}
+                            <span>${f2 || "Finalist 2"}</span>
+                            ${getOddsStr(f2)}
+                            ${f2Correct ? `<span class="points-tag">${f2Pts}</span>` : ''}
                         </div>
                     </div>
                     
                     <div class="round-title" style="margin-top: 30px; color: #ffd700;">ŞAMPİYON</div>
                     <div class="match champion-box ${champCorrect ? 'correct-guess' : ''}">
                         <div class="team ${!champ ? 'empty-slot' : ''}">
-                            ${champ || "Şampiyon"} ${champCorrect ? `<span class="points-tag" style="color: #fff;">${champPts}p</span>` : ''}
+                            <span>${champ || "Şampiyon"}</span>
+                            ${getOddsStr(champ)}
+                            ${champCorrect ? `<span class="points-tag" style="color: #fff;">${champPts}</span>` : ''}
                         </div>
                     </div>
 
@@ -419,11 +491,11 @@
 
                 <div class="column">
                     <div class="round-title">YARI FİNAL</div>
-                    ${renderSlots(predictions.sf.right, 'sf', 'right', 'final')}
+                    ${renderSlots(predictions.sf.right, 'sf', 'right', 'final', 2)}
                 </div>
                 <div class="column">
                     <div class="round-title">ÇEYREK FİNAL</div>
-                    ${renderSlots(predictions.qf.right, 'qf', 'right', 'sf')}
+                    ${renderSlots(predictions.qf.right, 'qf', 'right', 'sf', 2)}
                 </div>
                 <div class="column">
                     <div class="round-title">SON 16</div>
@@ -440,13 +512,17 @@
 
                 return `
                 <div class="match">
-                    <div class="team ${isT1Selected ? 'selected' : ''}" onclick="advance(this, '${match[0]}', '${currentRound}', '${side}', ${index}, '${nextRound}')">${match[0]}</div>
-                    <div class="team ${isT2Selected ? 'selected' : ''}" onclick="advance(this, '${match[1]}', '${currentRound}', '${side}', ${index}, '${nextRound}')">${match[1]}</div>
+                    <div class="team ${isT1Selected ? 'selected' : ''}" onclick="advance(this, '${match[0]}', '${currentRound}', '${side}', ${index}, '${nextRound}')">
+                        <span>${match[0]}</span> ${getOddsStr(match[0])}
+                    </div>
+                    <div class="team ${isT2Selected ? 'selected' : ''}" onclick="advance(this, '${match[1]}', '${currentRound}', '${side}', ${index}, '${nextRound}')">
+                        <span>${match[1]}</span> ${getOddsStr(match[1])}
+                    </div>
                 </div>`;
             }).join('');
         }
 
-        function renderSlots(slots, currentRound, side, nextRound) {
+        function renderSlots(slots, currentRound, side, nextRound, basePoints) {
             let html = '';
             let userSelectEl = document.getElementById('userSelect');
             let isViewingUser = userSelectEl && userSelectEl.value !== "" && !isRealResultsMode;
@@ -476,18 +552,18 @@
                     t2Correct = t2 !== "" && t2 === real[currentRound][side][i+1];
                 }
 
-                let t1Pts = t1Correct ? '+2' : '';
-                let t2Pts = t2Correct ? (t1Correct ? '+3' : '+2') : '';
+                let t1Pts = t1Correct ? `+${basePoints * (teamOdds[t1]||1)}p` : '';
+                let t2Pts = t2Correct ? `+${basePoints * (teamOdds[t2]||1)}p` : '';
 
                 html += `
                 <div class="match">
                     <div class="team ${isT1Selected ? 'selected' : ''} ${!t1 ? 'empty-slot' : ''} ${t1Correct ? 'correct-guess' : ''}" 
                          onclick="advance(this, '${t1}', '${currentRound}', '${side}', ${i}, '${nextRound}')">
-                         ${t1 || "?"} ${t1Correct ? `<span class="points-tag">${t1Pts}p</span>` : ''}
+                         <span>${t1 || "?"}</span> ${getOddsStr(t1)} ${t1Correct ? `<span class="points-tag">${t1Pts}</span>` : ''}
                     </div>
                     <div class="team ${isT2Selected ? 'selected' : ''} ${!t2 ? 'empty-slot' : ''} ${t2Correct ? 'correct-guess' : ''}" 
                          onclick="advance(this, '${t2}', '${currentRound}', '${side}', ${i+1}, '${nextRound}')">
-                         ${t2 || "?"} ${t2Correct ? `<span class="points-tag">${t2Pts}p</span>` : ''}
+                         <span>${t2 || "?"}</span> ${getOddsStr(t2)} ${t2Correct ? `<span class="points-tag">${t2Pts}</span>` : ''}
                     </div>
                 </div>`;
             }
@@ -497,7 +573,6 @@
         function advance(element, teamName, currentRound, side, index, nextRound) {
             if (!teamName || teamName === "?") return;
 
-            // YENİ EKLENDİ: Eğer eski bir kayıt inceleniyorsa ve admin modunda değilsek tıklamaya izin verme
             let userSelectEl = document.getElementById('userSelect');
             if (!isRealResultsMode && userSelectEl && userSelectEl.value !== "") {
                 alert("Kayıtlı bir tahmin üzerinde değişiklik yapamazsınız. Yeni bir tahmin yapmak istiyorsanız listeden 'Kayıtlı Tahminlere Bak' seçeneğine dönün.");
@@ -545,13 +620,11 @@
                 return;
             }
 
-            // YENİ EKLENDİ: İsim daha önceden alınmışsa ve yönetici değilsek üzerine kaydetmeyi engelle
             if (!isRealResultsMode && savedUsers[username]) {
                 alert('Bu isimde bir kayıt zaten var! Üzerine değişiklik yapılamaz. Eğer size aitse önce silmeniz gerekir.');
                 return;
             }
             
-            // FIREBASE: Veritabanına Yazma
             let dataToSave = JSON.parse(JSON.stringify(predictions));
             database.ref('cl_predictions/' + username).set(dataToSave).then(() => {
                 if(isRealResultsMode) {
@@ -572,12 +645,12 @@
 
             if (username && savedUsers[username]) {
                 document.getElementById('username').value = username;
-                document.getElementById('username').disabled = true; // YENİ EKLENDİ: İnceleme modunda ismin değiştirilmesini engeller
+                document.getElementById('username').disabled = true; 
                 predictions = JSON.parse(JSON.stringify(savedUsers[username]));
                 renderBracket();
             } else {
                 document.getElementById('username').value = "";
-                document.getElementById('username').disabled = false; // YENİ EKLENDİ
+                document.getElementById('username').disabled = false; 
                 predictions = { qf: { left: ["", "", "", ""], right: ["", "", "", ""] }, sf: { left: ["", ""], right: ["", ""] }, final: ["", ""], champion: "" };
                 renderBracket();
             }
@@ -624,10 +697,9 @@
             }
 
             if(confirm(username + ' adlı kullanıcının tahmini buluttan silinecek. Emin misin?')) {
-                // FIREBASE: Veritabanından Silme
                 database.ref('cl_predictions/' + username).remove().then(() => {
                     document.getElementById('username').value = "";
-                    document.getElementById('username').disabled = false; // YENİ EKLENDİ
+                    document.getElementById('username').disabled = false; 
                     document.getElementById('deletePass').value = "";
                     toggleDeleteBox();
                     
@@ -679,6 +751,40 @@
             renderBracket();
         }
 
+        // --- ORAN KAYDETME VE YÖNETME YENİ FONKSİYONLAR ---
+        function openOddsModal() {
+            const grid = document.getElementById('oddsGrid');
+            grid.innerHTML = "";
+            allTeamsList.forEach(team => {
+                let currentVal = teamOdds[team] || 1.0;
+                grid.innerHTML += `
+                    <div class="odds-item">
+                        <label>${team}</label>
+                        <input type="number" id="odd_${team}" step="0.1" min="1.0" value="${currentVal}">
+                    </div>
+                `;
+            });
+            document.getElementById('oddsModalOverlay').style.display = 'flex';
+        }
+
+        function closeOddsModal() {
+            document.getElementById('oddsModalOverlay').style.display = 'none';
+        }
+
+        function saveOdds() {
+            let newOdds = {};
+            allTeamsList.forEach(team => {
+                let val = parseFloat(document.getElementById(`odd_${team}`).value);
+                newOdds[team] = isNaN(val) ? 1.0 : val;
+            });
+            
+            database.ref('cl_odds').set(newOdds).then(() => {
+                alert("Oranlar başarıyla kaydedildi!");
+                closeOddsModal();
+            });
+        }
+
+        // PUANLAMA MANTIĞI YENİLENDİ
         function calculatePoints(user) {
             let real = savedUsers["GERCEKLIK_ADMIN_HESABI"];
             if(!real) return 0;
@@ -686,31 +792,36 @@
             let pts = 0;
             let pred = savedUsers[user];
             
-            function calcPair(p1, p2, r1, r2) {
+            function calcPair(p1, p2, r1, r2, basePts) {
                 let pairPts = 0;
                 let p1Correct = (p1 && p1 === r1);
                 let p2Correct = (p2 && p2 === r2);
-                if(p1Correct) pairPts += 2;
-                if(p2Correct) pairPts += 2;
-                if(p1Correct && p2Correct) pairPts += 1;
+                
+                // Puan x Takım Oranı Mantığı
+                if(p1Correct) pairPts += basePts * (teamOdds[p1] || 1.0);
+                if(p2Correct) pairPts += basePts * (teamOdds[p2] || 1.0);
+                if(p1Correct && p2Correct) pairPts += 1; // Eşleşmeyi tam bilme bonusu (+1) sabit kalır
+                
                 return pairPts;
             }
             
-            pts += calcPair(pred.qf.left[0], pred.qf.left[1], real.qf.left[0], real.qf.left[1]);
-            pts += calcPair(pred.qf.left[2], pred.qf.left[3], real.qf.left[2], real.qf.left[3]);
-            pts += calcPair(pred.qf.right[0], pred.qf.right[1], real.qf.right[0], real.qf.right[1]);
-            pts += calcPair(pred.qf.right[2], pred.qf.right[3], real.qf.right[2], real.qf.right[3]);
+            // Senin koddaki temel puanları (basePts) her aşama için 2 olarak baz aldım. Şampiyon 4.
+            pts += calcPair(pred.qf.left[0], pred.qf.left[1], real.qf.left[0], real.qf.left[1], 2);
+            pts += calcPair(pred.qf.left[2], pred.qf.left[3], real.qf.left[2], real.qf.left[3], 2);
+            pts += calcPair(pred.qf.right[0], pred.qf.right[1], real.qf.right[0], real.qf.right[1], 2);
+            pts += calcPair(pred.qf.right[2], pred.qf.right[3], real.qf.right[2], real.qf.right[3], 2);
 
-            pts += calcPair(pred.sf.left[0], pred.sf.left[1], real.sf.left[0], real.sf.left[1]);
-            pts += calcPair(pred.sf.right[0], pred.sf.right[1], real.sf.right[0], real.sf.right[1]);
+            pts += calcPair(pred.sf.left[0], pred.sf.left[1], real.sf.left[0], real.sf.left[1], 2);
+            pts += calcPair(pred.sf.right[0], pred.sf.right[1], real.sf.right[0], real.sf.right[1], 2);
 
-            pts += calcPair(pred.final[0], pred.final[1], real.final[0], real.final[1]);
+            pts += calcPair(pred.final[0], pred.final[1], real.final[0], real.final[1], 2);
 
             if(pred.champion && pred.champion === real.champion) {
-                pts += 4;
+                pts += 4 * (teamOdds[pred.champion] || 1.0);
             }
             
-            return pts;
+            // Küsüratlı puanları temiz göstermek için
+            return Math.round(pts * 100) / 100;
         }
 
         function showLeaderboard() {
@@ -729,9 +840,9 @@
             standings.sort((a,b) => b.points - a.points);
             
             let html = `
-            <div id="leaderboardModal" class="leaderboard-modal">
+            <div id="leaderboardModal" class="leaderboard-modal" style="position:fixed; top:15%; left:50%; transform:translateX(-50%);">
                 <h2 style="margin-top:0;">🏆 Puan Tablosu</h2>
-                <p style="font-size:12px; color:#64748b;">Doğru Takım: 2p | Eşleşmeyi Bilme Bonusu: +1p | Şampiyon: 4p</p>
+                <p style="font-size:12px; color:#64748b;">Doğru Takım: 2p x Oran | Şampiyon: 4p x Oran | Bonus: +1p</p>
                 <ul>`;
             
             if(standings.length === 0) {
@@ -803,6 +914,7 @@
             document.body.removeChild(link);
         }
 
+        // Sayfa yüklendiğinde Firebase dinleyicisini başlat
         init();
     </script>
 </body>
