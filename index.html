@@ -329,7 +329,7 @@
             <button onclick="enterAdminMode()" style="background-color: #10b981;">Giriş</button>
         </div>
 
-        <button class="btn-excel" onclick="exportToExcel()">Excel İndir 📊</button>
+        <button id="excelBtn" class="btn-excel" onclick="exportToExcel()" style="display: none;">Excel İndir 📊</button>
     </div>
 
     <div class="bracket-container" id="bracket">
@@ -345,7 +345,9 @@
             <button onclick="closeOddsModal()" style="width: 100%; padding: 12px; background: #475569;">İptal</button>
         </div>
     </div>
-
+<div style="margin-top: 50px; margin-bottom: 20px; color: #64748b; font-size: 13px; text-align: right; font-style: italic; letter-spacing: 1px; width: 100%; max-width: 1200px;">
+        Erdinç Tetik tarafından...
+    </div>
     <script>
         // ==========================================
         // FIREBASE AYARLARI
@@ -613,7 +615,7 @@
             }
         }
 
-        function savePrediction() {
+      function savePrediction() {
             const username = document.getElementById('username').value.trim();
             if (!username) {
                 alert('Lütfen kaydetmeden önce bir isim girin!');
@@ -626,9 +628,14 @@
             }
             
             let dataToSave = JSON.parse(JSON.stringify(predictions));
+            // O anki tarih ve saati Türkiye formatında ekliyoruz (Excel için)
+            dataToSave.timestamp = new Date().toLocaleString('tr-TR'); 
+
+            // DEĞİŞİKLİĞİ YAPTIĞIMIZ YER BURASI:
             database.ref('cl_predictions/' + username).set(dataToSave).then(() => {
                 if(isRealResultsMode) {
                     alert('Gerçekleşen sonuçlar tüm kullanıcılar için buluta kaydedildi!');
+                    exitAdminMode(); // KAYDETTİKTEN SONRA YÖNETİCİ MODUNDAN ÇIKAR VE EXCEL'İ GİZLER
                 } else {
                     alert(username + ' için tahminler buluta kaydedildi! Herkes görebilir.');
                 }
@@ -710,7 +717,7 @@
             }
         }
 
-        function enterAdminMode() {
+       function enterAdminMode() {
             const pass = document.getElementById('adminPass').value;
             if(pass !== '3434') { 
                 if(pass !== "") alert("Hatalı şifre!"); 
@@ -724,6 +731,9 @@
             document.body.style.border = "5px solid #ef4444";
             document.getElementById('userSelect').value = "";
             
+            // YENİ EKLENEN SATIR: Excel butonunu göster
+            document.getElementById('excelBtn').style.display = 'inline-block';
+            
             if(savedUsers["GERCEKLIK_ADMIN_HESABI"]) {
                 predictions = JSON.parse(JSON.stringify(savedUsers["GERCEKLIK_ADMIN_HESABI"]));
             } else {
@@ -734,7 +744,15 @@
             document.getElementById('adminPass').value = "";
             toggleAdminBox();
         }
-
+function exitAdminMode() {
+            isRealResultsMode = false;
+            document.getElementById('username').disabled = false;
+            document.getElementById('adminBanner').style.display = 'none';
+            document.body.style.border = "none";
+            
+            // YENİ EKLENEN SATIR: Excel butonunu tekrar gizle
+            document.getElementById('excelBtn').style.display = 'none';
+        }
         function exitAdminMode() {
             isRealResultsMode = false;
             document.getElementById('username').disabled = false;
@@ -840,10 +858,13 @@
             standings.sort((a,b) => b.points - a.points);
             
             let html = `
-            <div id="leaderboardModal" class="leaderboard-modal" style="position:fixed; top:15%; left:50%; transform:translateX(-50%);">
+            <div id="leaderboardModal" class="leaderboard-modal" style="position:fixed; top:15%; left:50%; transform:translateX(-50%); padding-top: 35px;">
+                <span onclick="document.getElementById('leaderboardModal').remove()" style="position: absolute; top: 10px; right: 15px; font-size: 28px; cursor: pointer; color: #94a3b8; font-weight: bold; line-height: 1; transition: 0.2s;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'">&times;</span>
+                
                 <h2 style="margin-top:0;">🏆 Puan Tablosu</h2>
                 <p style="font-size:12px; color:#64748b;">Doğru Takım: 2p x Oran | Şampiyon: 4p x Oran | Bonus: +1p</p>
-                <ul>`;
+                
+                <ul style="max-height: 50vh; overflow-y: auto; padding-right: 5px;">`;
             
             if(standings.length === 0) {
                 html += `<li>Henüz tahmin yapan kimse yok.</li>`;
@@ -854,7 +875,7 @@
                 });
             }
             
-            html += `</ul><button onclick="document.getElementById('leaderboardModal').remove()" style="width:100%; padding:12px; border-radius: 5px; border:none; color:white; font-weight:bold; cursor:pointer; background:#475569;">Kapat</button></div>`;
+            html += `</ul></div>`; // Alttaki büyük kapat butonunu sildik
             
             let oldModal = document.getElementById('leaderboardModal');
             if(oldModal) oldModal.remove();
@@ -868,13 +889,19 @@
                 return;
             }
 
+            // YENİ: Excel'in sayıları tarih yapmasını engellemek için style tanımı ekledik
             let tableHTML = `<html xmlns:x="urn:schemas-microsoft-com:office:excel">
-            <head><meta charset="utf-8"></head>
+            <head>
+                <meta charset="utf-8">
+                <style>
+                    .num-cell { mso-number-format:"\@"; } /* Hücreyi zorla metin yapar */
+                </style>
+            </head>
             <body>
                 <table border="1">
                     <thead>
                         <tr style="background-color: #f2f2f2;">
-                            <th>İsim</th>
+                            <th>Kayıt Tarihi</th> <th>İsim</th>
                             <th>Toplam Puan</th>
                             <th>Çeyrek Final 1</th><th>Çeyrek Final 2</th><th>Çeyrek Final 3</th><th>Çeyrek Final 4</th>
                             <th>Çeyrek Final 5</th><th>Çeyrek Final 6</th><th>Çeyrek Final 7</th><th>Çeyrek Final 8</th>
@@ -889,11 +916,18 @@
                 if (user === "GERCEKLIK_ADMIN_HESABI") continue;
 
                 let pred = savedUsers[user];
-                let pts = savedUsers["GERCEKLIK_ADMIN_HESABI"] ? calculatePoints(user) : "Hesaplanmadı";
+                
+                // YENİ: Eğer puan varsa 2.5 yerine 2,5 yap ki Türkiye Excel'i hata vermesin
+                let rawPts = savedUsers["GERCEKLIK_ADMIN_HESABI"] ? calculatePoints(user) : "Hesaplanmadı";
+                let pts = typeof rawPts === 'number' ? rawPts.toString().replace('.', ',') : rawPts;
+                
+                // YENİ: Eski kayıtların tarihi yoksa boş görünmesin diye "Eski Kayıt" yazıyoruz
+                let recordDate = pred.timestamp ? pred.timestamp : "Belirtilmedi";
 
                 tableHTML += `<tr>
+                    <td>${recordDate}</td>
                     <td>${user}</td>
-                    <td style="font-weight: bold; text-align: center;">${pts}</td>
+                    <td class="num-cell" style="font-weight: bold; text-align: center;">${pts}</td>
                     <td>${pred.qf.left[0] || "-"}</td><td>${pred.qf.left[1] || "-"}</td><td>${pred.qf.left[2] || "-"}</td><td>${pred.qf.left[3] || "-"}</td>
                     <td>${pred.qf.right[0] || "-"}</td><td>${pred.qf.right[1] || "-"}</td><td>${pred.qf.right[2] || "-"}</td><td>${pred.qf.right[3] || "-"}</td>
                     <td>${pred.sf.left[0] || "-"}</td><td>${pred.sf.left[1] || "-"}</td><td>${pred.sf.right[0] || "-"}</td><td>${pred.sf.right[1] || "-"}</td>
